@@ -1,0 +1,45 @@
+####################
+### App Settings ###
+####################
+AppSettings:
+  # Level at of which the bot will start displaying logging information. Valid logging
+  # levels are as follows in order from most output to least output:
+  #  - ALL
+  #  - TRACE
+  #  - DEBUG
+  #  - INFO
+  #  - WARN
+  #  - ERROR
+  #  - FATAL
+  #  - OFF
+  logLevel: INFO
+
+  # The name that this worker will send back to the bot for display in the work queue
+  # showing what media is currently being encoded and its progress.
+  workerName: "Test Worker"
+
+  # The API URL for the main Plexbot that is providing the API for the worker agents to connect to
+  apiAddress/mp-rest/url: "http://127.0.0.1:8080"
+
+
+#######################
+### Folder Settings ###
+#######################
+# IMPORTANT: All file paths must end with a trailing / in order for the bot to properly work
+FolderSettings:
+  # The folder that the movies are stored in
+  movieFolder: /path/to/movie/folder/
+
+  # The folder that the TV shows are stored in
+  tvFolder: /path/to/tv/folder/
+
+  # The folder where media to be imported into the libraries is stored in
+  # The import folder should be empty except two folders inside:
+  #   - movies
+  #   - episodes
+  # Place movies that need to get imported into the movies folder and episodes
+  # that need to get imported within the episodes folder.
+  importFolder: /path/to/import/folder/
+
+  # The folder that is used for temporary file operations
+  tempFolder: /path/to/temp/folder/

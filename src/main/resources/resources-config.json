@@ -1,0 +1,30 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "pattern": ".*/*.properties"
+      },
+      {
+        "pattern": ".*/*.yaml"
+      },
+      {
+        "pattern": ".*/*.sample"
+      },
+      {
+        "pattern": ".*/*.json"
+      },
+      {
+        "pattern": ".*/*.dylib"
+      },
+      {
+        "pattern": ".*/*.so"
+      },
+      {
+        "pattern": ".*/libjnidispatch.*"
+      },
+      {
+        "pattern": ".*/io.smallrye.config.*"
+      }
+    ]
+  }
+}
