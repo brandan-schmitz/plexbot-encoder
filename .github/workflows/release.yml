@@ -42,7 +42,9 @@ jobs:
         run: mvn clean generate-resources compile package -Pnative
       
       - name: Rename executable
-        run: rename target\plexbot-encoder-runner.exe target\plexbot-encoder-win64.exe
+        run: |
+          cd target
+          rename plexbot-encoder-runner.exe plexbot-encoder-win64.exe
         shell: cmd
       
       - name: Upload executable
@@ -172,12 +174,12 @@ jobs:
       - name: Download macOS executable
         uses: actions/download-artifact@v2
         with:
-          name: plexbot-encoder-darwin
+          name: plexbot-encoder-darwin64
     
       - name: Download linux executable
         uses: actions/download-artifact@v2
         with:
-          name: plexbot-encoder-linux
+          name: plexbot-encoder-linux64
       
       - name: Fetch release version
         id: fetch-release-version
@@ -193,8 +195,8 @@ jobs:
           prerelease: false
           files: |
             plexbot-encoder-win64.exe
-            plexbot-encoder-darwin
-            plexbot-encoder-linux
+            plexbot-encoder-darwin64
+            plexbot-encoder-linux64
             plexbot-encoder.jar
         env:
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
