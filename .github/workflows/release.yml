@@ -25,6 +25,9 @@ jobs:
           # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
           arch: 'amd64'
 
+      - name: Install MSVC
+        run: choco install visualstudio2017community --version 15.9.17.0 --no-progress --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --add Microsoft.VisualStudio.Component.VC.CMake.Project"
+
       - name: Install native-image component
         run: gu.cmd install native-image
 
@@ -42,6 +45,7 @@ jobs:
         with:
           name: plexbot-encoder-win64.exe
           path: target\plexbot-encoder-win64.exe
+          retention-days: 1
         
   build-macOS:
     runs-on: macos-latest
@@ -77,6 +81,7 @@ jobs:
         with:
           name: plexbot-encoder-darwin64
           path: target/plexbot-encoder-darwin64
+          retention-days: 1
         
   build-linux:
     runs-on: ubuntu-latest
@@ -112,6 +117,7 @@ jobs:
         with:
           name: plexbot-encoder-linux64
           path: target/plexbot-encoder-linux64
+          retention-days: 1
 
   build-jar:
     runs-on: ubuntu-latest
@@ -144,6 +150,7 @@ jobs:
         with:
           name: plexbot-encoder.jar
           path: target/plexbot-encoder.jar
+          retention-days: 1
 
   create-release:
     needs: [build-windows, build-macOS, build-linux, build-jar]
