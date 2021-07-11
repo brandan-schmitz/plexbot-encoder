@@ -6,8 +6,6 @@ name: Build Releases
 on:
   push:
     branches: [ v1 ]
-    tags:
-     - '*.*.*'
 
 jobs:
   build-windows:
