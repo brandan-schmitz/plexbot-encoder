@@ -27,6 +27,9 @@ jobs:
 
       - name: Install native-image component
         run: gu.cmd install native-image
+
+      - name: Create app config for building
+        run: copy src\main\resources\config.sample src\main\resources\application.yaml
       
       - name: Build native-image release
         run: mvn clean generate-resources compile package -Pnative
@@ -59,6 +62,9 @@ jobs:
 
       - name: Install native-image component
         run: gu install native-image
+
+      - name: Create app config for building
+        run: cp src/main/resources/config.sample src/main/resources/application.yaml
       
       - name: Build native-image release
         run: mvn clean generate-resources compile package -Pnative
@@ -91,6 +97,9 @@ jobs:
 
       - name: Install native-image component
         run: gu install native-image
+
+      - name: Create app config for building
+        run: cp src/main/resources/config.sample src/main/resources/application.yaml
       
       - name: Build native-image release
         run: mvn clean generate-resources compile package -Pnative
@@ -120,6 +129,9 @@ jobs:
           java: 'java11'
           # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
           arch: 'amd64'
+
+      - name: Create app config for building
+        run: cp src/main/resources/config.sample src/main/resources/application.yaml
       
       - name: Build jar release
         run: mvn clean generate-resources compile package -Puber
