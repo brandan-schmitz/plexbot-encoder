@@ -1,0 +1,178 @@
+# This workflow will build a Java project with Maven
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: Build Releases
+
+on:
+  push:
+    branches: [ v1 ]
+    tags:
+     - '*.*.*'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        
+      - name: Setup Graalvm
+        id: setup-graalvm
+        uses: DeLaGuardo/setup-graalvm@master
+        with:
+          # GraalVM version, no pattern syntax available atm
+          graalvm: '21.1.0'
+          # Java version, optional, defaults to 'java8'. Available options are 'java8' and 'java11'.
+          java: 'java11'
+          # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
+          arch: 'amd64'
+
+      - name: Install native-image component
+        run: gu.cmd install native-image
+      
+      - name: Build native-image release
+        run: mvn clean generate-resources compile package -Pnative
+      
+      - name: Rename executable
+        run: rename target\plexbot-encoder-runner.exe target\plexbot-encoder-win64.exe
+      
+      - name: Upload executable
+        uses: actions/upload-artifact@v2
+        with:
+          name: plexbot-encoder-win64.exe
+          path: target\plexbot-encoder-win64.exe
+        
+  build-macOS:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+    
+      - name: Setup Graalvm
+        id: setup-graalvm
+        uses: DeLaGuardo/setup-graalvm@master
+        with:
+          # GraalVM version, no pattern syntax available atm
+          graalvm: '21.1.0'
+          # Java version, optional, defaults to 'java8'. Available options are 'java8' and 'java11'.
+          java: 'java11'
+          # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
+          arch: 'amd64'
+
+      - name: Install native-image component
+        run: gu install native-image
+      
+      - name: Build native-image release
+        run: mvn clean generate-resources compile package -Pnative
+      
+      - name: Rename executable
+        run: mv target/plexbot-encoder-runner target/plexbot-encoder-darwin64
+        
+      - name: Upload executable
+        uses: actions/upload-artifact@v2
+        with:
+          name: plexbot-encoder-darwin64
+          path: target/plexbot-encoder-darwin64
+        
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        
+      - name: Setup Graalvm
+        id: setup-graalvm
+        uses: DeLaGuardo/setup-graalvm@master
+        with:
+          # GraalVM version, no pattern syntax available atm
+          graalvm: '21.1.0'
+          # Java version, optional, defaults to 'java8'. Available options are 'java8' and 'java11'.
+          java: 'java11'
+          # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
+          arch: 'amd64'
+
+      - name: Install native-image component
+        run: gu install native-image
+      
+      - name: Build native-image release
+        run: mvn clean generate-resources compile package -Pnative
+      
+      - name: Rename executable
+        run: mv target/plexbot-encoder-runner target/plexbot-encoder-linux64
+        
+      - name: Upload executable
+        uses: actions/upload-artifact@v2
+        with:
+          name: plexbot-encoder-linux64
+          path: target/plexbot-encoder-linux64
+
+  build-jar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        
+      - name: Setup Graalvm
+        id: setup-graalvm
+        uses: DeLaGuardo/setup-graalvm@master
+        with:
+          # GraalVM version, no pattern syntax available atm
+          graalvm: '21.1.0'
+          # Java version, optional, defaults to 'java8'. Available options are 'java8' and 'java11'.
+          java: 'java11'
+          # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
+          arch: 'amd64'
+      
+      - name: Build jar release
+        run: mvn clean generate-resources compile package -Puber
+      
+      - name: Rename jar
+        run: mv target/plexbot-encoder-runner.jar target/plexbot-encoder.jar
+        
+      - name: Upload jar
+        uses: actions/upload-artifact@v2
+        with:
+          name: plexbot-encoder.jar
+          path: target/plexbot-encoder.jar
+
+  create-release:
+    needs: [build-windows, build-macOS, build-linux, build-jar]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        
+      - name: Download windows executable
+        uses: actions/download-artifact@v2
+        with:
+          name: plexbot-encoder-win64.exe
+          
+      - name: Download macOS executable
+        uses: actions/download-artifact@v2
+        with:
+          name: plexbot-encoder-darwin
+    
+      - name: Download linux executable
+        uses: actions/download-artifact@v2
+        with:
+          name: plexbot-encoder-linux
+      
+      - name: Fetch release version
+        id: fetch-release-version
+        run: echo "::set-output name=release-version::$(cat pom.xml | sed -n 's/  <version>\(.*\)<\/version>/\1/p; /version>/q')"
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: v${{ steps.fetch-release-version.outputs.release-version }}
+          tag_name: ${{ steps.fetch-release-version.outputs.release-version }}
+          target_commitish: v1
+          draft: true
+          prerelease: false
+          files: |
+            plexbot-encoder-win64.exe
+            plexbot-encoder-darwin
+            plexbot-encoder-linux
+            plexbot-encoder.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
