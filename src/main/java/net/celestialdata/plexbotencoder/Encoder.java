@@ -1,5 +1,6 @@
 package net.celestialdata.plexbotencoder;
 
+import com.github.kokorin.jaffree.JaffreeException;
 import com.github.kokorin.jaffree.LogLevel;
 import com.github.kokorin.jaffree.ffmpeg.*;
 import io.quarkus.scheduler.Scheduled;
@@ -31,6 +32,9 @@ public class Encoder {
 
     @ConfigProperty(name = "AppSettings.workerName")
     String workerName;
+
+    @ConfigProperty(name = "AppSettings.crf")
+    String crf;
 
     @ConfigProperty(name = "FolderSettings.movieFolder")
     String movieFolder;
@@ -70,6 +74,13 @@ public class Encoder {
     @Scheduled(every = "15m", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void fetchWork() {
         if (isNotEncoding) {
+            var itemPath = "";
+            var finalPath = "";
+            var mediaTitle = "";
+            var tempFilePath = "";
+            var outputFilePath = "";
+            var itemFileExtension = "";
+
             try {
                 // Create a new, blank work item
                 currentWorkItem = new WorkItem();
@@ -98,9 +109,6 @@ public class Encoder {
                         movieService.get(newWorkAssignment.mediaId) : episodeService.get(newWorkAssignment.mediaId);
 
                 // Generate the path to the media item
-                var itemPath = "";
-                var itemFileExtension = "";
-                var mediaTitle = "";
                 if (mediaItem instanceof Movie) {
                     itemPath = movieFolder + ((Movie) mediaItem).folderName + "/" + ((Movie) mediaItem).filename;
                     itemFileExtension = ((Movie) mediaItem).filetype;
@@ -112,23 +120,21 @@ public class Encoder {
                 }
 
                 // Generate the destination path for the temp media item
-                var tempFilePath = tempFolder + newWorkAssignment.mediaId + "-old." + itemFileExtension;
+                tempFilePath = tempFolder + newWorkAssignment.mediaId + "-old." + itemFileExtension;
 
                 // Generate the output filepath
-                var outputFilePath = tempFolder + newWorkAssignment.mediaId + ".mkv";
+                outputFilePath = tempFolder + newWorkAssignment.mediaId + ".mkv";
 
                 // Ensure that the generated file path is not empty, cancel if it is
                 if (itemPath.isBlank()) {
-                    currentWorkItem.progress = "error (path generation error)";
-                    workService.update(currentWorkItem.id, currentWorkItem);
+                    workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
 
                 // Ensure the media item exists, cancel if it does
                 if (Files.notExists(Paths.get(itemPath))) {
-                    currentWorkItem.progress = "error (missing file)";
-                    workService.update(currentWorkItem.id, currentWorkItem);
+                    workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
@@ -138,46 +144,62 @@ public class Encoder {
 
                 // Copy media item to the temp folder and ensure it was successful
                 if (copyMedia(itemPath, tempFilePath)) {
-                    currentWorkItem.progress = "error (file copy failed)";
-                    workService.update(currentWorkItem.id, currentWorkItem);
+                    workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
 
-                // Get the media duration
-                final AtomicLong duration = new AtomicLong();
-                FFmpeg.atPath()
-                        .addInput(UrlInput.fromUrl(tempFilePath))
-                        .setOverwriteOutput(true)
-                        .addOutput(new NullOutput())
-                        .setProgressListener(progress -> duration.set(progress.getTimeMillis()))
-                        .execute();
+                // Ensure that we catch errors with the encoding process itself
+                try {
+                    // Get the media duration
+                    final AtomicLong duration = new AtomicLong();
+                    FFmpeg.atPath()
+                            .addInput(UrlInput.fromUrl(tempFilePath))
+                            .setOverwriteOutput(true)
+                            .addOutput(new NullOutput())
+                            .setLogLevel(LogLevel.ERROR)
+                            .setProgressListener(progress -> duration.set(progress.getTimeMillis()))
+                            .execute();
 
-                // Build the encoding process
-                FFmpeg.atPath()
-                        .addInput(UrlInput.fromUrl(tempFilePath))
-                        .addArguments("-c:v", "libx265")
-                        .addArguments("-crf", "26")
-                        .addArguments("-preset", "medium")
-                        .addArguments("-c:a", "copy")
-                        .addArguments("-c:s", "copy")
-                        .addArguments("-metadata", "title=\"" + mediaTitle + "\"")
-                        .setOverwriteOutput(true)
-                        .setLogLevel(LogLevel.ERROR)
-                        .addOutput(UrlOutput.toUrl(outputFilePath))
-                        .setProgressListener(fFmpegProgress -> currentWorkItem.progress =
-                                decimalFormatter.format(100. * fFmpegProgress.getTimeMillis() / duration.get()) + "%")
-                        .execute();
+                    // Build the encoding process
+                    FFmpeg.atPath()
+                            .addInput(UrlInput.fromUrl(tempFilePath))
+                            .addArguments("-c:v", "libx265")
+                            .addArguments("-crf", crf)
+                            .addArguments("-preset", "medium")
+                            .addArguments("-c:a", "copy")
+                            .addArguments("-c:s", "copy")
+                            .addArguments("-metadata", "title=\"" + mediaTitle + "\"")
+                            .setOverwriteOutput(true)
+                            .setLogLevel(LogLevel.ERROR)
+                            .addOutput(UrlOutput.toUrl(outputFilePath))
+                            .setProgressListener(fFmpegProgress -> currentWorkItem.progress =
+                                    decimalFormatter.format(100. * fFmpegProgress.getTimeMillis() / duration.get()) + "%")
+                            .execute();
+                } catch (JaffreeException e) {
+                    workService.delete(currentWorkItem.id);
+
+                    // Attempt to delete work files
+                    try {
+                        Files.deleteIfExists(Paths.get(outputFilePath));
+                        Files.deleteIfExists(Paths.get(tempFilePath));
+                        Files.deleteIfExists(Paths.get(finalPath));
+                    } catch (Exception e2) {
+                        logger.error(e2);
+                    }
+
+                    isNotEncoding = true;
+                    return;
+                }
 
                 // Generate the path for the final file being moved to the import folder
-                var finalPath = newWorkAssignment.type.equals("movie") ?
+                finalPath = newWorkAssignment.type.equals("movie") ?
                         importFolder + "movies/" + newWorkAssignment.mediaId + ".mkv" :
                         importFolder + "episodes/" + newWorkAssignment.mediaId + ".mkv";
 
                 // Copy the media file to the import folder
                 if (copyMedia(outputFilePath, finalPath)) {
-                    currentWorkItem.progress = "error (final file copy failed)";
-                    workService.update(currentWorkItem.id, currentWorkItem);
+                    workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
@@ -187,11 +209,10 @@ public class Encoder {
 
                 // Delete both files from the temp folder
                 try {
-                    Files.delete(Paths.get(outputFilePath));
-                    Files.delete(Paths.get(tempFilePath));
+                    Files.deleteIfExists(Paths.get(outputFilePath));
+                    Files.deleteIfExists(Paths.get(tempFilePath));
                 } catch (IOException e) {
-                    currentWorkItem.progress = "error (failed deleting files)";
-                    workService.update(currentWorkItem.id, currentWorkItem);
+                    workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
@@ -201,14 +222,22 @@ public class Encoder {
 
                 // Mark that the encoding has been finished
                 isNotEncoding = true;
-            } catch (Exception e) {
+            } catch (Exception e1) {
                 // Update the work item with the error state and end the encoding
-                currentWorkItem.progress = "error (unknown error)";
-                workService.update(currentWorkItem.id, currentWorkItem);
+                workService.delete(currentWorkItem.id);
                 isNotEncoding = true;
 
+                // Attempt to delete work files
+                try {
+                    Files.deleteIfExists(Paths.get(outputFilePath));
+                    Files.deleteIfExists(Paths.get(tempFilePath));
+                    Files.deleteIfExists(Paths.get(finalPath));
+                } catch (Exception e2) {
+                    logger.error(e2);
+                }
+
                 // Log the error
-                logger.error(e);
+                logger.error(e1);
             }
         }
     }
