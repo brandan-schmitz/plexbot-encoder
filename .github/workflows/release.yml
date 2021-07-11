@@ -5,7 +5,7 @@ name: Build Releases
 
 on:
   push:
-    branches: [ v1, master ]
+    branches: [ v1 ]
 
 jobs:
   build-windows:
@@ -36,12 +36,14 @@ jobs:
 
       - name: Create app config for building
         run: copy src\main\resources\config.sample src\main\resources\application.yaml
+        shell: cmd
       
       - name: Build native-image release
         run: mvn clean generate-resources compile package -Pnative
       
       - name: Rename executable
         run: rename target\plexbot-encoder-runner.exe target\plexbot-encoder-win64.exe
+        shell: cmd
       
       - name: Upload executable
         uses: actions/upload-artifact@v2
