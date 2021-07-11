@@ -180,6 +180,11 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: plexbot-encoder-linux64
+
+      - name: Download jar
+        uses: actions/download-artifact@v2
+        with:
+          name: plexbot-encoder.jar
       
       - name: Fetch release version
         id: fetch-release-version
