@@ -16,10 +16,15 @@ AppSettings:
 
   # The name that this worker will send back to the bot for display in the work queue
   # showing what media is currently being encoded and its progress.
-  workerName: "Test Worker"
+  workerName: "encoder-01"
 
   # The API URL for the main Plexbot that is providing the API for the worker agents to connect to
   apiAddress/mp-rest/url: "http://127.0.0.1:8080"
+
+  # Set the Constant Rate Factor that is used by the encoder to encode media with. Valid options are
+  # 0 through 51. Generally, the higher the number, the smaller the end file however the worse the quality
+  # of the video file.
+  crf: 23
 
 
 #######################
