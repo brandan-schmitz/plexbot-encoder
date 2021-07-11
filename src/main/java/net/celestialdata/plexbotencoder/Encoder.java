@@ -71,7 +71,7 @@ public class Encoder {
         }
     }
 
-    @Scheduled(every = "15m", delay = 10, delayUnit = TimeUnit.SECONDS)
+    @Scheduled(every = "1m", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void fetchWork() {
         if (isNotEncoding) {
             var itemPath = "";
