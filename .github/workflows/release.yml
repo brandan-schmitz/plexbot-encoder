@@ -190,7 +190,6 @@ jobs:
         with:
           name: v${{ steps.fetch-release-version.outputs.release-version }}
           tag_name: ${{ steps.fetch-release-version.outputs.release-version }}
-          target_commitish: v1
           draft: true
           prerelease: false
           files: |
@@ -199,4 +198,4 @@ jobs:
             plexbot-encoder-linux64
             plexbot-encoder.jar
         env:
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
