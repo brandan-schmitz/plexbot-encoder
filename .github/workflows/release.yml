@@ -5,7 +5,7 @@ name: Build Releases
 
 on:
   push:
-    branches: [ v1 ]
+    branches: [ v1, master ]
 
 jobs:
   build-windows:
@@ -13,6 +13,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
+
+      - name: Install MSVC
+        uses: ilammy/msvc-dev-cmd@v1.5.0
+
+      - name: Setup MS Build Tools
+        uses: microsoft/setup-msbuild@v1
         
       - name: Setup Graalvm
         id: setup-graalvm
@@ -24,9 +30,6 @@ jobs:
           java: 'java11'
           # Architecture flag, optional, defaults to 'amd64'. Available options are 'amd64' and 'aarch64'. Later is available only for linux runners.
           arch: 'amd64'
-
-      - name: Install MSVC
-        run: choco install visualstudio2017community --version 15.9.17.0 --no-progress --package-parameters "--add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --add Microsoft.VisualStudio.Component.VC.CMake.Project"
 
       - name: Install native-image component
         run: gu.cmd install native-image
