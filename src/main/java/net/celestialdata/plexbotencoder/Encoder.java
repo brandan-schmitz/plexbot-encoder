@@ -80,7 +80,6 @@ public class Encoder {
         if (isNotEncoding) {
             var itemPath = "";
             var finalPath = "";
-            var mediaTitle = "";
             var tempFilePath = "";
             var outputFilePath = "";
             var itemFileExtension = "";
@@ -116,11 +115,9 @@ public class Encoder {
                 if (mediaItem instanceof Movie) {
                     itemPath = movieFolder + ((Movie) mediaItem).folderName + "/" + ((Movie) mediaItem).filename;
                     itemFileExtension = ((Movie) mediaItem).filetype;
-                    mediaTitle = ((Movie) mediaItem).title;
                 } else if (mediaItem != null) {
                     itemPath = tvFolder + ((Episode) mediaItem).show.foldername + "/Season " + ((Episode) mediaItem).season + "/" + ((Episode) mediaItem).filename;
                     itemFileExtension = ((Episode) mediaItem).filetype;
-                    mediaTitle = ((Episode) mediaItem).title;
                 }
 
                 // Generate the destination path for the temp media item
@@ -181,7 +178,6 @@ public class Encoder {
                             .addArguments("-preset", "medium")
                             .addArguments("-c:a", "copy")
                             .addArguments("-c:s", "copy")
-                            .addArguments("-metadata", "title=\"" + mediaTitle + "\"")
                             .setOverwriteOutput(true)
                             .setLogLevel(LogLevel.ERROR)
                             .addOutput(UrlOutput.toUrl(outputFilePath))
@@ -209,15 +205,15 @@ public class Encoder {
                         importFolder + "movies/" + newWorkAssignment.mediaId + ".mkv" :
                         importFolder + "episodes/" + newWorkAssignment.mediaId + ".mkv";
 
+                // Update the progress of the encoding
+                currentWorkItem.progress = "cleaning up";
+
                 // Copy the media file to the import folder
                 if (copyMedia(outputFilePath, finalPath)) {
                     workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
-
-                // Update the progress of the encoding
-                currentWorkItem.progress = "cleaning up";
 
                 // Delete both files from the temp folder
                 try {
