@@ -26,6 +26,13 @@ AppSettings:
   # of the video file.
   crf: 23
 
+  # Enables support for hardware acceleration when being used on windows systems that have AMD or Nvidia GPU cards.
+  # This setting only has an effect on Windows platforms. The following options are available:
+  #  - none         Disables hardware acceleration.
+  #  - amd          Enables hardware acceleration for AMD GPU cards.
+  #  - nvidia       Enables hardware acceleration for Nvidia GPU cards.
+  accelerationHardware: none
+
 
 #######################
 ### Folder Settings ###

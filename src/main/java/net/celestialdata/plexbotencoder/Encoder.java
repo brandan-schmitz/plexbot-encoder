@@ -8,6 +8,7 @@ import net.celestialdata.plexbotencoder.clients.models.Episode;
 import net.celestialdata.plexbotencoder.clients.models.Movie;
 import net.celestialdata.plexbotencoder.clients.models.WorkItem;
 import net.celestialdata.plexbotencoder.clients.services.*;
+import org.apache.commons.lang3.SystemUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
@@ -35,6 +36,9 @@ public class Encoder {
 
     @ConfigProperty(name = "AppSettings.crf")
     String crf;
+
+    @ConfigProperty(name = "AppSettings.accelerationHardware")
+    String accelerationHardware;
 
     @ConfigProperty(name = "FolderSettings.movieFolder")
     String movieFolder;
@@ -149,6 +153,14 @@ public class Encoder {
                     return;
                 }
 
+                // Determine which encoder to use
+                var encoder = "libx265";
+                if (SystemUtils.IS_OS_WINDOWS && accelerationHardware.equalsIgnoreCase("nvidia")) {
+                    encoder = "hevc_nvenc";
+                } else if (SystemUtils.IS_OS_WINDOWS && accelerationHardware.equalsIgnoreCase("amd")) {
+                    encoder = "hevc_amf";
+                }
+
                 // Ensure that we catch errors with the encoding process itself
                 try {
                     // Get the media duration
@@ -164,7 +176,7 @@ public class Encoder {
                     // Build the encoding process
                     FFmpeg.atPath()
                             .addInput(UrlInput.fromUrl(tempFilePath))
-                            .addArguments("-c:v", "libx265")
+                            .addArguments("-c:v", encoder)
                             .addArguments("-crf", crf)
                             .addArguments("-preset", "medium")
                             .addArguments("-c:a", "copy")
