@@ -1,6 +1,7 @@
 package net.celestialdata.plexbotencoder.clients.services;
 
 import net.celestialdata.plexbotencoder.clients.models.Episode;
+import org.eclipse.microprofile.faulttolerance.Retry;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 import javax.inject.Singleton;
@@ -15,6 +16,7 @@ import javax.ws.rs.core.MediaType;
 public interface EpisodeService {
 
     @GET
+    @Retry()
     @Path("/{id}")
     Episode get(@PathParam("id") String id);
 }
