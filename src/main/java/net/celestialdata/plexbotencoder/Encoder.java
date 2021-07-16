@@ -3,23 +3,29 @@ package net.celestialdata.plexbotencoder;
 import com.github.kokorin.jaffree.JaffreeException;
 import com.github.kokorin.jaffree.LogLevel;
 import com.github.kokorin.jaffree.ffmpeg.*;
+import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import net.celestialdata.plexbotencoder.clients.models.Episode;
 import net.celestialdata.plexbotencoder.clients.models.Movie;
 import net.celestialdata.plexbotencoder.clients.models.WorkItem;
 import net.celestialdata.plexbotencoder.clients.services.*;
+import net.celestialdata.plexbotencoder.utilities.FileType;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
+import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -85,31 +91,22 @@ public class Encoder {
             var itemFileExtension = "";
 
             try {
-                // Create a new, blank work item
-                currentWorkItem = new WorkItem();
+                // Fetch the next job to work on
+                currentWorkItem = getNextJob();
 
-                // Fetch the next encoding work assignment from the queue
-                var newWorkAssignment = queueService.next();
-
-                // Ensure that a work assignment was given, otherwise cancel
-                if (newWorkAssignment == null) {
+                // Ensure that there is actually a job to work on
+                if (currentWorkItem == null) {
                     isNotEncoding = true;
                     return;
                 }
 
-                // Create a new work item for the media file
-                currentWorkItem.progress = "loading media file";
-                currentWorkItem.workerAgentName = workerName;
-                currentWorkItem.type = newWorkAssignment.type;
-                currentWorkItem.mediaId = newWorkAssignment.mediaId;
-                currentWorkItem.id = workService.create(currentWorkItem);
-
                 // Mark that the encoding process has started
                 isNotEncoding = false;
+                currentWorkItem.progress = "loading media";
 
                 // Fetch the media file based on the type contained in the queue item
-                var mediaItem = newWorkAssignment.type.equals("movie") ?
-                        movieService.get(newWorkAssignment.mediaId) : episodeService.get(newWorkAssignment.mediaId);
+                var mediaItem = currentWorkItem.type.equals("movie") ?
+                        movieService.get(currentWorkItem.mediaId) : episodeService.get(currentWorkItem.mediaId);
 
                 // Generate the path to the media item
                 if (mediaItem instanceof Movie) {
@@ -121,10 +118,10 @@ public class Encoder {
                 }
 
                 // Generate the destination path for the temp media item
-                tempFilePath = tempFolder + newWorkAssignment.mediaId + "-old." + itemFileExtension;
+                tempFilePath = tempFolder + currentWorkItem.mediaId + "-old." + itemFileExtension;
 
                 // Generate the output filepath
-                outputFilePath = tempFolder + newWorkAssignment.mediaId + ".mkv";
+                outputFilePath = tempFolder + currentWorkItem.mediaId + ".mkv";
 
                 // Ensure that the generated file path is not empty, cancel if it is
                 if (itemPath.isBlank()) {
@@ -133,15 +130,12 @@ public class Encoder {
                     return;
                 }
 
-                // Ensure the media item exists, cancel if it does
+                // Ensure the media item exists, cancel if it does not
                 if (Files.notExists(Paths.get(itemPath))) {
                     workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
                 }
-
-                // Delete the queue item
-                queueService.delete(newWorkAssignment.id);
 
                 // Copy media item to the temp folder and ensure it was successful
                 if (copyMedia(itemPath, tempFilePath)) {
@@ -201,9 +195,9 @@ public class Encoder {
                 }
 
                 // Generate the path for the final file being moved to the import folder
-                finalPath = newWorkAssignment.type.equals("movie") ?
-                        importFolder + "movies/" + newWorkAssignment.mediaId + ".mkv" :
-                        importFolder + "episodes/" + newWorkAssignment.mediaId + ".mkv";
+                finalPath = currentWorkItem.type.equals("movie") ?
+                        importFolder + "movies/" + currentWorkItem.mediaId + ".mkv" :
+                        importFolder + "episodes/" + currentWorkItem.mediaId + ".mkv";
 
                 // Update the progress of the encoding
                 currentWorkItem.progress = "cleaning up";
@@ -250,6 +244,63 @@ public class Encoder {
         }
     }
 
+    private WorkItem getNextJob() {
+        // Check to make sure there are no previous jobs that this
+        // encoding agent was working on that are still in the database.
+        // If there are, it likely means the encoder never finished so it should
+        // re-attempt the encoding process.
+        var databaseProcesses = workService.get();
+        if (!databaseProcesses.isEmpty()) {
+            for (WorkItem item : databaseProcesses) {
+                if (item.workerAgentName.equals(workerName)) {
+                    if (item.type.equals("movie")) {
+                        // Fetch the movie from the API
+                        var movieInfo = movieService.get(item.mediaId);
+
+                        // If the movie has not already been optimized, retry the
+                        // optimization of this item
+                        if (!movieInfo.isOptimized) {
+                            return item;
+                        }
+                    } else if (item.type.equals("episode")) {
+                        // Fetch the episode from the API
+                        var episodeInfo = episodeService.get(item.mediaId);
+
+                        // If the episode has not already been optimized, retry the
+                        // optimization of this item
+                        if (!episodeInfo.isOptimized) {
+                            return item;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Create a new, blank work item
+        var nextWorkItem = new WorkItem();
+
+        // Fetch the next encoding work assignment from the queue
+        var queueItem = queueService.next();
+
+        // Ensure that a work assignment was given, otherwise cancel
+        if (queueItem == null) {
+            return null;
+        }
+
+        // Create a new work item for the media file
+        nextWorkItem.progress = "loading media file";
+        nextWorkItem.workerAgentName = workerName;
+        nextWorkItem.type = queueItem.type;
+        nextWorkItem.mediaId = queueItem.mediaId;
+        nextWorkItem.id = workService.create(nextWorkItem);
+
+        // Delete the queue item
+        queueService.delete(queueItem.id);
+
+        // Return the built work item
+        return nextWorkItem;
+    }
+
     private boolean copyMedia(String source, String destination) {
         boolean failed = false;
 
@@ -266,5 +317,37 @@ public class Encoder {
         }
 
         return failed;
+    }
+
+
+    public void cleanTempFolder(@Observes StartupEvent startupEvent) {
+        // Create the array of media file extensions to look for
+        String[] mediaFileExtensions = {
+                FileType.AVI.getTypeString(),
+                FileType.DIVX.getTypeString(),
+                FileType.FLV.getTypeString(),
+                FileType.M4V.getTypeString(),
+                FileType.MKV.getTypeString(),
+                FileType.MP4.getTypeString(),
+                FileType.MPEG.getTypeString(),
+                FileType.MPG.getTypeString(),
+                FileType.WMV.getTypeString()
+        };
+
+        // Collect a list of media files to delete
+        Collection<File> mediaFiles = FileUtils.listFiles(new File(tempFolder), mediaFileExtensions, false);
+
+        // Remove any directories and hidden files from the list
+        mediaFiles.removeIf(File::isDirectory);
+        mediaFiles.removeIf(File::isHidden);
+
+        // Delete files in the temp folder
+        mediaFiles.forEach(file -> {
+            try {
+                Files.deleteIfExists(file.getAbsoluteFile().toPath());
+            } catch (IOException e) {
+                logger.error(e);
+            }
+        });
     }
 }
