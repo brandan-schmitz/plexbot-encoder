@@ -196,8 +196,8 @@ public class Encoder {
 
                 // Generate the path for the final file being moved to the import folder
                 finalPath = currentWorkItem.type.equals("movie") ?
-                        importFolder + "movies/" + currentWorkItem.mediaId + ".mkv" :
-                        importFolder + "episodes/" + currentWorkItem.mediaId + ".mkv";
+                        importFolder + "optimized/movies/" + currentWorkItem.mediaId + ".mkv" :
+                        importFolder + "optimized/episodes/" + currentWorkItem.mediaId + ".mkv";
 
                 // Update the progress of the encoding
                 currentWorkItem.progress = "cleaning up";
