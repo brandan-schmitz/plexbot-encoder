@@ -77,7 +77,7 @@
     <dependency>
       <groupId>com.github.kokorin.jaffree</groupId>
       <artifactId>jaffree</artifactId>
-      <version>2021.05.31</version>
+      <version>2021.08.04</version>
     </dependency>
     <dependency>
       <groupId>org.jboss.slf4j</groupId>
