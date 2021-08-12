@@ -18,6 +18,26 @@ public enum FileType {
     VTT(".vtt"),
     UNKNOWN(".");
 
+    public static String[] mediaFileExtensions = {
+            FileType.AVI.getTypeString(),
+            FileType.DIVX.getTypeString(),
+            FileType.FLV.getTypeString(),
+            FileType.M4V.getTypeString(),
+            FileType.MKV.getTypeString(),
+            FileType.MP4.getTypeString(),
+            FileType.MPEG.getTypeString(),
+            FileType.MPG.getTypeString(),
+            FileType.WMV.getTypeString()
+    };
+
+    public static String[] subtitleFileExtensions = {
+            FileType.SRT.getTypeString(),
+            FileType.SMI.getTypeString(),
+            FileType.SSA.getTypeString(),
+            FileType.ASS.getTypeString(),
+            FileType.VTT.getTypeString()
+    };
+
     private final String extension;
 
     FileType(String extension) {

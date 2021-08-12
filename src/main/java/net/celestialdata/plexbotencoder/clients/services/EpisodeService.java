@@ -17,6 +17,6 @@ public interface EpisodeService {
 
     @GET
     @Retry()
-    @Path("/{id}")
-    Episode get(@PathParam("id") String id);
+    @Path("/{tvdb_id}")
+    Episode get(@PathParam("tvdb_id") long id);
 }

@@ -2,18 +2,19 @@ package net.celestialdata.plexbotencoder.clients.models;
 
 @SuppressWarnings("unused")
 public class Episode {
-    public String id;
+    public Integer id;
+    public Long tvdbId;
     public String title;
     public String date;
-    public int number;
-    public String season;
+    public Integer number;
+    public Integer season;
     public Show show;
     public String filename;
     public String filetype;
-    public int height;
-    public int width;
-    public int duration;
+    public Integer height;
+    public Integer width;
+    public Integer duration;
     public String codec;
-    public int resolution;
-    public boolean isOptimized;
+    public Integer resolution;
+    public Boolean isOptimized;
 }

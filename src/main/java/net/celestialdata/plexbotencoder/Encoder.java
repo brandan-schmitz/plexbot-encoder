@@ -105,7 +105,7 @@ public class Encoder {
                 currentWorkItem.progress = "loading media";
 
                 // Fetch the media file based on the type contained in the queue item
-                var mediaItem = currentWorkItem.type.equals("movie") ?
+                var mediaItem = currentWorkItem.mediaType.equals("movie") ?
                         movieService.get(currentWorkItem.mediaId) : episodeService.get(currentWorkItem.mediaId);
 
                 // Generate the path to the media item
@@ -195,7 +195,7 @@ public class Encoder {
                 }
 
                 // Generate the path for the final file being moved to the import folder
-                finalPath = currentWorkItem.type.equals("movie") ?
+                finalPath = currentWorkItem.mediaType.equals("movie") ?
                         importFolder + "optimized/movies/" + currentWorkItem.mediaId + ".mkv" :
                         importFolder + "optimized/episodes/" + currentWorkItem.mediaId + ".mkv";
 
@@ -247,13 +247,13 @@ public class Encoder {
     private WorkItem getNextJob() {
         // Check to make sure there are no previous jobs that this
         // encoding agent was working on that are still in the database.
-        // If there are, it likely means the encoder never finished so it should
-        // re-attempt the encoding process.
+        // If there are, it likely means the encoder never finished, so the
+        // encoder should re-attempt the encoding process.
         var databaseProcesses = workService.get();
         if (!databaseProcesses.isEmpty()) {
             for (WorkItem item : databaseProcesses) {
                 if (item.workerAgentName.equals(workerName)) {
-                    if (item.type.equals("movie")) {
+                    if (item.mediaType.equals("movie")) {
                         // Fetch the movie from the API
                         var movieInfo = movieService.get(item.mediaId);
 
@@ -262,7 +262,7 @@ public class Encoder {
                         if (!movieInfo.isOptimized) {
                             return item;
                         }
-                    } else if (item.type.equals("episode")) {
+                    } else if (item.mediaType.equals("episode")) {
                         // Fetch the episode from the API
                         var episodeInfo = episodeService.get(item.mediaId);
 
@@ -290,7 +290,7 @@ public class Encoder {
         // Create a new work item for the media file
         nextWorkItem.progress = "loading media file";
         nextWorkItem.workerAgentName = workerName;
-        nextWorkItem.type = queueItem.type;
+        nextWorkItem.mediaType = queueItem.mediaType;
         nextWorkItem.mediaId = queueItem.mediaId;
         nextWorkItem.id = workService.create(nextWorkItem);
 
@@ -319,23 +319,9 @@ public class Encoder {
         return failed;
     }
 
-
     public void cleanTempFolder(@Observes StartupEvent startupEvent) {
-        // Create the array of media file extensions to look for
-        String[] mediaFileExtensions = {
-                FileType.AVI.getTypeString(),
-                FileType.DIVX.getTypeString(),
-                FileType.FLV.getTypeString(),
-                FileType.M4V.getTypeString(),
-                FileType.MKV.getTypeString(),
-                FileType.MP4.getTypeString(),
-                FileType.MPEG.getTypeString(),
-                FileType.MPG.getTypeString(),
-                FileType.WMV.getTypeString()
-        };
-
         // Collect a list of media files to delete
-        Collection<File> mediaFiles = FileUtils.listFiles(new File(tempFolder), mediaFileExtensions, false);
+        Collection<File> mediaFiles = FileUtils.listFiles(new File(tempFolder), FileType.mediaFileExtensions, false);
 
         // Remove any directories and hidden files from the list
         mediaFiles.removeIf(File::isDirectory);
