@@ -17,6 +17,6 @@ public interface MovieService {
 
     @GET
     @Retry()
-    @Path("/{id}")
-    Movie get(@PathParam("id") String id);
+    @Path("/{tmdb_id}")
+    Movie get(@PathParam("tmdb_id") long id);
 }

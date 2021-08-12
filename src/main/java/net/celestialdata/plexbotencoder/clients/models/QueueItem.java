@@ -2,7 +2,7 @@ package net.celestialdata.plexbotencoder.clients.models;
 
 @SuppressWarnings("unused")
 public class QueueItem {
-    public int id;
-    public String type;
-    public String mediaId;
+    public Integer id;
+    public String mediaType;
+    public Long mediaId;
 }

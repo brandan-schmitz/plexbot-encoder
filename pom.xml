@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.celestialdata</groupId>
   <artifactId>plexbot-encoder</artifactId>
-  <version>1.0.6</version>
+  <version>1.1.0</version>
   <properties>
     <compiler-plugin.version>3.8.1</compiler-plugin.version>
     <maven.compiler.parameters>true</maven.compiler.parameters>
@@ -16,9 +16,9 @@
     <quarkus.application.version>${project.version}</quarkus.application.version>
     <quarkus.platform.artifact-id>quarkus-universe-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
-    <quarkus.platform.version>2.0.3.Final</quarkus.platform.version>
+    <quarkus.platform.version>2.1.1.Final</quarkus.platform.version>
     <quarkus.ssl.native>true</quarkus.ssl.native>
-    <version-date>07/22/2021</version-date>
+    <version-date>08/11/2021</version-date>
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -72,12 +72,13 @@
     <dependency>
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
+      <!--suppress MavenPackageUpdate -->
       <version>2.11.0</version>
     </dependency>
     <dependency>
       <groupId>com.github.kokorin.jaffree</groupId>
       <artifactId>jaffree</artifactId>
-      <version>2021.05.31</version>
+      <version>2021.08.04</version>
     </dependency>
     <dependency>
       <groupId>org.jboss.slf4j</groupId>
