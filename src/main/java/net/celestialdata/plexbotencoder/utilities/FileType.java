@@ -16,7 +16,9 @@ public enum FileType {
     SSA(".ssa"),
     ASS(".ass"),
     VTT(".vtt"),
-    UNKNOWN(".");
+    UNKNOWN("."),
+    MAGNET(".magnet"),
+    TORRENT(".torrent");
 
     public static String[] mediaFileExtensions = {
             FileType.AVI.getTypeString(),
@@ -99,6 +101,10 @@ public enum FileType {
             fileType = FileType.ASS;
         } else if (filename.endsWith(FileType.VTT.extension)) {
             fileType = FileType.VTT;
+        } else if (filename.endsWith(FileType.MAGNET.extension)) {
+            fileType = FileType.MAGNET;
+        } else if (filename.endsWith(FileType.TORRENT.extension)) {
+            fileType = FileType.TORRENT;
         }
 
         return fileType;
