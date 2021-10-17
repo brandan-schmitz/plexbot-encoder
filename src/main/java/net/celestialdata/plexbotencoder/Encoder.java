@@ -226,7 +226,9 @@ public class Encoder {
                 isNotEncoding = true;
             } catch (Exception e1) {
                 // Update the work item with the error state and end the encoding
-                workService.delete(currentWorkItem.id);
+                if (currentWorkItem.id != null) {
+                    workService.delete(currentWorkItem.id);
+                }
                 isNotEncoding = true;
 
                 // Attempt to delete work files
