@@ -202,8 +202,8 @@ public class Encoder {
                 // Update the progress of the encoding
                 currentWorkItem.progress = "cleaning up";
 
-                // Copy the media file to the import folder
-                if (copyMedia(outputFilePath, finalPath)) {
+                // Move the media file to the import folder
+                if (moveMedia(outputFilePath, finalPath)) {
                     workService.delete(currentWorkItem.id);
                     isNotEncoding = true;
                     return;
@@ -319,6 +319,24 @@ public class Encoder {
         }
 
         return failed;
+    }
+
+    public boolean moveMedia(String source, String destination) {
+        boolean success;
+
+        // If the file exists and the overwrite flag is false, then do not write the file
+        if (Files.exists(Paths.get(destination))) {
+            success = false;
+        } else {
+            try {
+                success = new File(source).renameTo(new File(destination));
+            } catch (Exception e) {
+                e.printStackTrace();
+                success = false;
+            }
+        }
+
+        return success;
     }
 
     public void cleanTempFolder(@Observes StartupEvent startupEvent) {
