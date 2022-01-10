@@ -46,7 +46,7 @@ public class Encoder {
     @ConfigProperty(name = "AppSettings.accelerationHardware")
     String accelerationHardware;
 
-    @ConfigProperty(name = "FolderSettings.tempFolder")
+    @ConfigProperty(name = "AppSettings.tempFolder")
     String tempFolder;
 
     @Inject
