@@ -19,11 +19,11 @@ import org.jboss.logging.Logger;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import java.io.File;
-import java.io.IOException;
+import javax.ws.rs.core.Response;
+import java.io.*;
+import java.nio.channels.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
@@ -45,15 +45,6 @@ public class Encoder {
 
     @ConfigProperty(name = "AppSettings.accelerationHardware")
     String accelerationHardware;
-
-    @ConfigProperty(name = "FolderSettings.movieFolder")
-    String movieFolder;
-
-    @ConfigProperty(name = "FolderSettings.tvFolder")
-    String tvFolder;
-
-    @ConfigProperty(name = "FolderSettings.importFolder")
-    String importFolder;
 
     @ConfigProperty(name = "FolderSettings.tempFolder")
     String tempFolder;
@@ -77,15 +68,13 @@ public class Encoder {
     @Scheduled(every = "3s", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void updateProgress() {
         if (!isNotEncoding) {
-            workService.update(currentWorkItem.id, currentWorkItem);
+            workService.update(currentWorkItem.id, currentWorkItem.progress);
         }
     }
 
     @Scheduled(every = "1m", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void fetchWork() {
         if (isNotEncoding) {
-            var itemPath = "";
-            var finalPath = "";
             var tempFilePath = "";
             var outputFilePath = "";
             var itemFileExtension = "";
@@ -108,41 +97,47 @@ public class Encoder {
                 var mediaItem = currentWorkItem.mediaType.equals("movie") ?
                         movieService.get(currentWorkItem.mediaId) : episodeService.get(currentWorkItem.mediaId);
 
-                // Generate the path to the media item
+                // Use the right API to get the download connection of the file based on its type
+                Response downloadResponse = null;
                 if (mediaItem instanceof Movie) {
-                    itemPath = movieFolder + ((Movie) mediaItem).folderName + "/" + ((Movie) mediaItem).filename;
+                    downloadResponse = movieService.downloadFile(((Movie) mediaItem).id);
                     itemFileExtension = ((Movie) mediaItem).filetype;
                 } else if (mediaItem != null) {
-                    itemPath = tvFolder + ((Episode) mediaItem).show.foldername + "/Season " + ((Episode) mediaItem).season + "/" + ((Episode) mediaItem).filename;
+                    downloadResponse = episodeService.downloadFile(((Episode) mediaItem).id);
                     itemFileExtension = ((Episode) mediaItem).filetype;
                 }
 
-                // Generate the destination path for the temp media item
+                // Ensure it was able to get a download connection otherwise cancel
+                if (downloadResponse == null) {
+                    workService.delete(currentWorkItem.id);
+                    isNotEncoding = true;
+                    return;
+                }
+
+                // Build the destination path for this file
                 tempFilePath = tempFolder + currentWorkItem.mediaId + "-old." + itemFileExtension;
+
+                // Create the input and output streams
+                ReadableByteChannel downloadByteChannel = Channels.newChannel((InputStream) downloadResponse.getEntity());
+                FileChannel downloadOutputStream = new FileOutputStream(tempFilePath, false).getChannel();
+
+                // Download the file
+                long downloadProgress = 0;
+                long downloadFileSize = Long.parseLong(downloadResponse.getHeaderString("Content-Length"));
+                while (downloadOutputStream.transferFrom(downloadByteChannel, downloadOutputStream.size(), 1024) > 0) {
+                    downloadProgress += 1024;
+                    currentWorkItem.progress = "downloading file: " + decimalFormatter.format((((double) downloadProgress / downloadFileSize) * 100)) + "%";
+                }
+
+                // Close the data streams
+                downloadByteChannel.close();
+                downloadOutputStream.close();
+
+                // Show that the download has been completed
+                currentWorkItem.progress = "gathering information";
 
                 // Generate the output filepath
                 outputFilePath = tempFolder + currentWorkItem.mediaId + ".mkv";
-
-                // Ensure that the generated file path is not empty, cancel if it is
-                if (itemPath.isBlank()) {
-                    workService.delete(currentWorkItem.id);
-                    isNotEncoding = true;
-                    return;
-                }
-
-                // Ensure the media item exists, cancel if it does not
-                if (Files.notExists(Paths.get(itemPath))) {
-                    workService.delete(currentWorkItem.id);
-                    isNotEncoding = true;
-                    return;
-                }
-
-                // Copy media item to the temp folder and ensure it was successful
-                if (copyMedia(itemPath, tempFilePath)) {
-                    workService.delete(currentWorkItem.id);
-                    isNotEncoding = true;
-                    return;
-                }
 
                 // Determine which encoder to use
                 var encoder = "libx265";
@@ -185,7 +180,6 @@ public class Encoder {
                     try {
                         Files.deleteIfExists(Paths.get(outputFilePath));
                         Files.deleteIfExists(Paths.get(tempFilePath));
-                        Files.deleteIfExists(Paths.get(finalPath));
                     } catch (Exception e2) {
                         logger.error(e2);
                     }
@@ -194,20 +188,16 @@ public class Encoder {
                     return;
                 }
 
-                // Generate the path for the final file being moved to the import folder
-                finalPath = currentWorkItem.mediaType.equals("movie") ?
-                        importFolder + "optimized/movies/" + currentWorkItem.mediaId + ".mkv" :
-                        importFolder + "optimized/episodes/" + currentWorkItem.mediaId + ".mkv";
+                // Upload the file
+                currentWorkItem.progress = "uploading";
+                if (mediaItem instanceof Movie) {
+                    movieService.uploadFile(((Movie) mediaItem).id, new FileInputStream(outputFilePath));
+                } else {
+                    episodeService.uploadFile(((Episode) mediaItem).id, new FileInputStream(outputFilePath));
+                }
 
                 // Update the progress of the encoding
                 currentWorkItem.progress = "cleaning up";
-
-                // Move the media file to the import folder
-                if (moveMedia(outputFilePath, finalPath)) {
-                    workService.delete(currentWorkItem.id);
-                    isNotEncoding = true;
-                    return;
-                }
 
                 // Delete both files from the temp folder
                 try {
@@ -225,6 +215,8 @@ public class Encoder {
                 // Mark that the encoding has been finished
                 isNotEncoding = true;
             } catch (Exception e1) {
+                e1.printStackTrace();
+
                 // Update the work item with the error state and end the encoding
                 if (currentWorkItem.id != null) {
                     workService.delete(currentWorkItem.id);
@@ -235,7 +227,6 @@ public class Encoder {
                 try {
                     Files.deleteIfExists(Paths.get(outputFilePath));
                     Files.deleteIfExists(Paths.get(tempFilePath));
-                    Files.deleteIfExists(Paths.get(finalPath));
                 } catch (Exception e2) {
                     logger.error(e2);
                 }
@@ -301,42 +292,6 @@ public class Encoder {
 
         // Return the built work item
         return nextWorkItem;
-    }
-
-    private boolean copyMedia(String source, String destination) {
-        boolean failed = false;
-
-        try {
-            // Copy the file to the destination
-            Files.copy(
-                    Paths.get(source),
-                    Paths.get(destination),
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (Exception e) {
-            failed = true;
-            logger.error(e);
-        }
-
-        return failed;
-    }
-
-    public boolean moveMedia(String source, String destination) {
-        boolean success;
-
-        // If the file exists and the overwrite flag is false, then do not write the file
-        if (Files.exists(Paths.get(destination))) {
-            success = false;
-        } else {
-            try {
-                success = new File(source).renameTo(new File(destination));
-            } catch (Exception e) {
-                e.printStackTrace();
-                success = false;
-            }
-        }
-
-        return success;
     }
 
     public void cleanTempFolder(@Observes StartupEvent startupEvent) {
