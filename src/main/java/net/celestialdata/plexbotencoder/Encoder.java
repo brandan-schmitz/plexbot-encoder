@@ -12,8 +12,6 @@ import net.celestialdata.plexbotencoder.clients.services.*;
 import net.celestialdata.plexbotencoder.utilities.FileType;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.SystemUtils;
-import org.apache.http.client.methods.RequestBuilder;
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.logging.Logger;
@@ -21,19 +19,12 @@ import org.jboss.logging.Logger;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import javax.net.ssl.HttpsURLConnection;
-import javax.ws.rs.core.Request;
 import javax.ws.rs.core.Response;
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLConnection;
 import java.nio.channels.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.text.DecimalFormat;
-import java.util.Base64;
 import java.util.Collection;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,17 +37,8 @@ public class Encoder {
 
     private static final Logger logger = Logger.getLogger(Encoder.class);
 
-    @ConfigProperty(name = "AppSettings.apiAddress/mp-rest/url")
-    String baseUrl;
-
     @ConfigProperty(name = "AppSettings.workerName")
     String workerName;
-
-    @ConfigProperty(name = "AppSettings.username")
-    String username;
-
-    @ConfigProperty(name = "AppSettings.password")
-    String password;
 
     @ConfigProperty(name = "AppSettings.crf")
     String crf;
@@ -93,7 +75,6 @@ public class Encoder {
     @Scheduled(every = "1m", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void fetchWork() {
         if (isNotEncoding) {
-            var finalPath = "";
             var tempFilePath = "";
             var outputFilePath = "";
             var itemFileExtension = "";
@@ -119,7 +100,6 @@ public class Encoder {
                 // Use the right API to get the download connection of the file based on its type
                 Response downloadResponse = null;
                 if (mediaItem instanceof Movie) {
-                    // Get start the connection to the server to download the file
                     downloadResponse = movieService.downloadFile(((Movie) mediaItem).id);
                     itemFileExtension = ((Movie) mediaItem).filetype;
                 } else if (mediaItem != null) {
@@ -156,7 +136,6 @@ public class Encoder {
                 // Show that the download has been completed
                 currentWorkItem.progress = "gathering information";
 
-                /*
                 // Generate the output filepath
                 outputFilePath = tempFolder + currentWorkItem.mediaId + ".mkv";
 
@@ -201,7 +180,6 @@ public class Encoder {
                     try {
                         Files.deleteIfExists(Paths.get(outputFilePath));
                         Files.deleteIfExists(Paths.get(tempFilePath));
-                        Files.deleteIfExists(Paths.get(finalPath));
                     } catch (Exception e2) {
                         logger.error(e2);
                     }
@@ -209,55 +187,13 @@ public class Encoder {
                     isNotEncoding = true;
                     return;
                 }
-                 */
-
-                // Determine which API endpoint to use
-                var apiEndpoint = baseUrl;
-                var mediaItemId = 0;
-                if (mediaItem instanceof Movie) {
-                    apiEndpoint = apiEndpoint + "/api/v1/movies/upload";
-                    mediaItemId = ((Movie) mediaItem).id;
-                } else {
-                    apiEndpoint = apiEndpoint + "/api/v1/episodes/upload";
-                    mediaItemId = ((Episode) mediaItem).id;
-                }
-
-                logger.info("Determined API endpoint: " + apiEndpoint);
-
-                // Determine the size of the file that will be uploaded
-                var uploadFileSize = new File(tempFilePath).length();
-
-                logger.info("Determined file size: " + uploadFileSize);
-
-                // Open an HTTP Connection to the API endpoint for uploading the file
-                HttpURLConnection uploadConnection = (HttpURLConnection) new URL(apiEndpoint).openConnection();
-
-                logger.info("Opened URL connection");
-
-                // Configure the connection headers
-                uploadConnection.setDoOutput(true);
-                uploadConnection.setChunkedStreamingMode(4096);
-                uploadConnection.setRequestMethod("POST");
-                uploadConnection.addRequestProperty("Content-Type", "application/octet-stream");
-                uploadConnection.addRequestProperty("Content-Length", String.valueOf(uploadFileSize));
-                uploadConnection.addRequestProperty("Content-Id", String.valueOf(mediaItemId));
-                uploadConnection.addRequestProperty("Authorization", "Basic " +
-                        Base64.getEncoder().encodeToString((username + ":" + password).getBytes()));
-
-                logger.info("Configured connection");
-
-                // Create the channels used to upload the file
-                WritableByteChannel uploadDataChannel = Channels.newChannel(uploadConnection.getOutputStream());
-                FileChannel uploadFileChannel = new FileInputStream(tempFilePath).getChannel();
-
-                logger.info("Created channels");
 
                 // Upload the file
-                long uploadProgress = 0;
-                while (uploadFileChannel.transferTo(uploadFileChannel.size(), 1024, uploadDataChannel) > 0) {
-                    uploadProgress += 1024;
-                    logger.info("Uploading file: " + uploadProgress);
-                    currentWorkItem.progress = "uploading file: " + decimalFormatter.format((((double) uploadProgress / uploadFileSize) * 100)) + "%";
+                currentWorkItem.progress = "uploading";
+                if (mediaItem instanceof Movie) {
+                    movieService.uploadFile(((Movie) mediaItem).id, new FileInputStream(outputFilePath));
+                } else {
+                    episodeService.uploadFile(((Episode) mediaItem).id, new FileInputStream(outputFilePath));
                 }
 
                 // Update the progress of the encoding
@@ -291,7 +227,6 @@ public class Encoder {
                 try {
                     Files.deleteIfExists(Paths.get(outputFilePath));
                     Files.deleteIfExists(Paths.get(tempFilePath));
-                    Files.deleteIfExists(Paths.get(finalPath));
                 } catch (Exception e2) {
                     logger.error(e2);
                 }
@@ -357,42 +292,6 @@ public class Encoder {
 
         // Return the built work item
         return nextWorkItem;
-    }
-
-    private boolean copyMedia(String source, String destination) {
-        boolean failed = false;
-
-        try {
-            // Copy the file to the destination
-            Files.copy(
-                    Paths.get(source),
-                    Paths.get(destination),
-                    StandardCopyOption.REPLACE_EXISTING
-            );
-        } catch (Exception e) {
-            failed = true;
-            logger.error(e);
-        }
-
-        return failed;
-    }
-
-    public boolean moveMedia(String source, String destination) {
-        boolean success;
-
-        // If the file exists and the overwrite flag is false, then do not write the file
-        if (Files.exists(Paths.get(destination))) {
-            success = false;
-        } else {
-            try {
-                success = new File(source).renameTo(new File(destination));
-            } catch (Exception e) {
-                e.printStackTrace();
-                success = false;
-            }
-        }
-
-        return success;
     }
 
     public void cleanTempFolder(@Observes StartupEvent startupEvent) {

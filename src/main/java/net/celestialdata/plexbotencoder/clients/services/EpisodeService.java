@@ -33,5 +33,5 @@ public interface EpisodeService {
     @Path("/upload")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_OCTET_STREAM)
-    Response uploadFile(@HeaderParam("Content-Length") long fileSize, @HeaderParam("Content-Id") int id, InputStream data);
+    Response uploadFile(@HeaderParam("Content-Id") int id, InputStream data);
 }
