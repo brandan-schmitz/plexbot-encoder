@@ -1,7 +1,9 @@
 package net.celestialdata.plexbotencoder.clients.services;
 
+import net.celestialdata.plexbotencoder.clients.AuthorizationHeaderFactory;
 import net.celestialdata.plexbotencoder.clients.models.WorkItem;
 import org.eclipse.microprofile.faulttolerance.Retry;
+import org.eclipse.microprofile.rest.client.annotation.RegisterClientHeaders;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
 import javax.inject.Singleton;
@@ -10,10 +12,11 @@ import javax.ws.rs.core.MediaType;
 import java.util.List;
 
 @Singleton
-@Path("/encoding/work")
+@Path("/api/v1/encoding/work")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
 @RegisterRestClient(configKey = "AppSettings.apiAddress")
+@RegisterClientHeaders(AuthorizationHeaderFactory.class)
 public interface WorkService {
 
     @GET
@@ -32,7 +35,7 @@ public interface WorkService {
     @PUT
     @Retry()
     @Path("/{id}")
-    WorkItem update(@PathParam("id") int id, WorkItem workItem);
+    WorkItem update(@PathParam("id") int id, @QueryParam("progress") String progress);
 
     @DELETE
     @Retry()
