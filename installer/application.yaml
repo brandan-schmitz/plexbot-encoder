@@ -1,0 +1,5 @@
+quarkus:
+  http:
+    host-enabled: false
+AppSettings:
+  logLevel: INFO

@@ -8,8 +8,22 @@ on:
     branches: [ v1 ]
 
 jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      release-version: ${{ steps.fetch-release-version.outputs.release-version }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Fetch release version
+        id: fetch-release-version
+        run: echo "::set-output name=release-version::$(cat pom.xml | sed -n 's/  <version>\(.*\)<\/version>/\1/p; /version>/q')"
+
   build-windows:
     runs-on: windows-latest
+    needs:
+      - determine-version
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -34,6 +48,13 @@ jobs:
       - name: Install native-image component
         run: gu.cmd install native-image
 
+      - name: Download and install Inno Setup
+        run: |
+          curl.exe -o innosetup-6.2.0.exe https://files.jrsoftware.org/is/6/innosetup-6.2.0.exe
+          innosetup-6.2.0.exe /VERYSILENT /NORESTART /ALLUSERS
+          echo "C:\Program Files (x86)\Inno Setup 6" >> $GITHUB_PATH
+        shell: cmd
+
       - name: Create app config for building
         run: copy src\main\resources\config.sample src\main\resources\application.yaml
         shell: cmd
@@ -46,16 +67,42 @@ jobs:
           cd target
           rename plexbot-encoder-runner.exe plexbot-encoder-win64.exe
         shell: cmd
-      
+
+      - name: Prep installer build files
+        run: |
+          copy plexbot-encoder-win64.exe installer
+          cd installer
+          curl -o ffmpeg.zip -L https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2022-01-11-12-22/ffmpeg-N-105258-g3c2b674468-win64-gpl.zip
+          tar -xf ffmpeg.zip --strip-components 2 *.exe
+          del ffmpeg.zip
+        shell: cmd
+
+      - name: Build Installer
+        run: |
+          cd installer
+          iscc plexbot-installer-config.iss
+        shell: cmd
+        env:
+          - RELEASE_VERSION: ${{ needs.determine-version.outputs.release-version }}
+
       - name: Upload executable
         uses: actions/upload-artifact@v2
         with:
           name: plexbot-encoder-win64.exe
           path: target\plexbot-encoder-win64.exe
           retention-days: 1
+
+      - name: Upload installer
+          uses: actions/upload-artifact@v2
+          with:
+            name: plexbot-encoder_v${{ needs.determine-version.outputs.release-version }}.exe
+            path: installer\Output\plexbot-encoder_v${{ needs.determine-version.outputs.release-version }}.exe
+            retention-days: 1
         
   build-macOS:
     runs-on: macos-latest
+    needs:
+      - determine-version
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -92,6 +139,8 @@ jobs:
         
   build-linux:
     runs-on: ubuntu-latest
+    needs:
+      - determine-version
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -128,6 +177,8 @@ jobs:
 
   build-jar:
     runs-on: ubuntu-latest
+    needs:
+      - determine-version
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -160,8 +211,13 @@ jobs:
           retention-days: 1
 
   create-release:
-    needs: [build-windows, build-macOS, build-linux, build-jar]
     runs-on: ubuntu-latest
+    needs:
+      - determine-version
+      - build-windows
+      - build-macOS
+      - build-linux
+      - build-jar
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -170,6 +226,11 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: plexbot-encoder-win64.exe
+
+      - name: Download Windows Installer
+        uses: actions/download-artifact@v2
+        with:
+          name: plexbot-encoder_v${{ needs.determine-version.outputs.release-version }}.exe
           
       - name: Download macOS executable
         uses: actions/download-artifact@v2
@@ -186,19 +247,16 @@ jobs:
         with:
           name: plexbot-encoder.jar
       
-      - name: Fetch release version
-        id: fetch-release-version
-        run: echo "::set-output name=release-version::$(cat pom.xml | sed -n 's/  <version>\(.*\)<\/version>/\1/p; /version>/q')"
-      
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: v${{ steps.fetch-release-version.outputs.release-version }}
-          tag_name: ${{ steps.fetch-release-version.outputs.release-version }}
+          name: v${{ needs.determine-version.outputs.release-version }}
+          tag_name: ${{ needs.determine-version.outputs.release-version }}
           draft: true
           prerelease: false
           files: |
             plexbot-encoder-win64.exe
+            plexbot-encoder_v${{ needs.determine-version.outputs.release-version }}.exe
             plexbot-encoder-darwin64
             plexbot-encoder-linux64
             plexbot-encoder.jar
