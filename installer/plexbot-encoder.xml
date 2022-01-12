@@ -1,0 +1,11 @@
+<service>
+  <id>plexbot-encoder</id>
+  <name>Plexbot Encoder v1.2.0</name>
+  <description>The official encoding agent for the Plexbot project.</description>
+  <executable>"%BASE%\plexbot-encoder-win64.exe"</executable>
+  <log mode="roll-by-size-time">
+    <sizeThreshold>10240</sizeThreshold>
+    <pattern>yyyyMMdd</pattern>
+    <autoRollAtTime>00:00:00</autoRollAtTime>
+  </log>
+  <onfailure action="restart" />

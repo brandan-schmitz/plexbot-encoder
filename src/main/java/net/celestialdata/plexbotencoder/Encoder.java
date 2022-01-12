@@ -19,6 +19,7 @@ import org.jboss.logging.Logger;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 import javax.inject.Inject;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import java.io.*;
 import java.nio.channels.*;
@@ -67,8 +68,12 @@ public class Encoder {
 
     @Scheduled(every = "3s", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void updateProgress() {
-        if (!isNotEncoding) {
-            workService.update(currentWorkItem.id, currentWorkItem.progress);
+        try {
+            if (!isNotEncoding) {
+                workService.update(currentWorkItem.id, currentWorkItem.progress);
+            }
+        } catch (WebApplicationException e) {
+            logger.warn("Failed to updated status, server returned a " + e.getResponse().getStatus() + " error code");
         }
     }
 
@@ -80,14 +85,24 @@ public class Encoder {
             var itemFileExtension = "";
 
             try {
+                logger.info("Fetching a new job");
+
                 // Fetch the next job to work on
-                currentWorkItem = getNextJob();
+                try {
+                    currentWorkItem = getNextJob();
+                } catch (WebApplicationException e) {
+                    logger.error("Failed to fetch job, server returned a " + e.getResponse().getStatus() + " error code");
+                    isNotEncoding = true;
+                    return;
+                }
 
                 // Ensure that there is actually a job to work on
                 if (currentWorkItem == null) {
                     isNotEncoding = true;
                     return;
                 }
+
+                logger.info("Fetched " + currentWorkItem.mediaType + " " + currentWorkItem.mediaId + " from the queue");
 
                 // Mark that the encoding process has started
                 isNotEncoding = false;
@@ -117,6 +132,8 @@ public class Encoder {
                 // Build the destination path for this file
                 tempFilePath = tempFolder + currentWorkItem.mediaId + "-old." + itemFileExtension;
 
+                logger.info("Downloading " + currentWorkItem.mediaType + " " + currentWorkItem.mediaId);
+
                 // Create the input and output streams
                 ReadableByteChannel downloadByteChannel = Channels.newChannel((InputStream) downloadResponse.getEntity());
                 FileChannel downloadOutputStream = new FileOutputStream(tempFilePath, false).getChannel();
@@ -135,6 +152,7 @@ public class Encoder {
 
                 // Show that the download has been completed
                 currentWorkItem.progress = "gathering information";
+                logger.info("Download finished, gathering file information");
 
                 // Generate the output filepath
                 outputFilePath = tempFolder + currentWorkItem.mediaId + ".mkv";
@@ -146,6 +164,8 @@ public class Encoder {
                 } else if (SystemUtils.IS_OS_WINDOWS && accelerationHardware.equalsIgnoreCase("amd")) {
                     encoder = "hevc_amf";
                 }
+
+                logger.info("Encoding " + tempFilePath + " into " + outputFilePath);
 
                 // Ensure that we catch errors with the encoding process itself
                 try {
@@ -188,6 +208,9 @@ public class Encoder {
                     return;
                 }
 
+                logger.info("Finished encoding " + outputFilePath);
+                logger.info("Uploading " + outputFilePath);
+
                 // Upload the file
                 currentWorkItem.progress = "uploading";
                 if (mediaItem instanceof Movie) {
@@ -198,6 +221,7 @@ public class Encoder {
 
                 // Update the progress of the encoding
                 currentWorkItem.progress = "cleaning up";
+                logger.info("Upload finished");
 
                 // Delete both files from the temp folder
                 try {
@@ -214,9 +238,8 @@ public class Encoder {
 
                 // Mark that the encoding has been finished
                 isNotEncoding = true;
+                logger.info("Job completed");
             } catch (Exception e1) {
-                e1.printStackTrace();
-
                 // Update the work item with the error state and end the encoding
                 if (currentWorkItem.id != null) {
                     workService.delete(currentWorkItem.id);
@@ -232,7 +255,7 @@ public class Encoder {
                 }
 
                 // Log the error
-                logger.error(e1);
+                logger.error("Job failed to run", e1);
             }
         }
     }
