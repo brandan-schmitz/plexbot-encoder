@@ -1,6 +1,6 @@
 <service>
   <id>plexbot-encoder</id>
-  <name>Plexbot Encoder v1.2.0</name>
+  <name>Plexbot Encoder v0.0.0</name>
   <description>The official encoding agent for the Plexbot project.</description>
   <executable>"%BASE%\plexbot-encoder-win64.exe"</executable>
   <log mode="roll-by-size-time">

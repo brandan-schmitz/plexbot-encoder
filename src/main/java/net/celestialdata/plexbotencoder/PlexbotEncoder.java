@@ -16,6 +16,7 @@ import java.util.Properties;
 @ApplicationScoped
 public class PlexbotEncoder implements QuarkusApplication {
     private static String version = "0.0.0";
+    private static int exitCode = 0;
 
     public static void main(String... args) {
         // Set the default version and date variables
@@ -60,9 +61,13 @@ public class PlexbotEncoder implements QuarkusApplication {
         return version;
     }
 
+    public static void setExitCode(int code) {
+        exitCode = code;
+    }
+
     @Override
     public int run(String... args) {
         Quarkus.waitForExit();
-        return 0;
+        return exitCode;
     }
 }

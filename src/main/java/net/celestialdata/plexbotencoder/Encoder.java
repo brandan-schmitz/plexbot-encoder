@@ -3,9 +3,11 @@ package net.celestialdata.plexbotencoder;
 import com.github.kokorin.jaffree.JaffreeException;
 import com.github.kokorin.jaffree.LogLevel;
 import com.github.kokorin.jaffree.ffmpeg.*;
+import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import net.celestialdata.plexbotencoder.clients.models.Episode;
+import net.celestialdata.plexbotencoder.clients.models.HistoryItem;
 import net.celestialdata.plexbotencoder.clients.models.Movie;
 import net.celestialdata.plexbotencoder.clients.models.WorkItem;
 import net.celestialdata.plexbotencoder.clients.services.*;
@@ -38,6 +40,8 @@ public class Encoder {
 
     private static final Logger logger = Logger.getLogger(Encoder.class);
 
+    private int failCount = 0;
+
     @ConfigProperty(name = "AppSettings.workerName")
     String workerName;
 
@@ -66,6 +70,10 @@ public class Encoder {
     @RestClient
     WorkService workService;
 
+    @Inject
+    @RestClient
+    HistoryService historyService;
+
     @Scheduled(every = "3s", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void updateProgress() {
         try {
@@ -84,6 +92,14 @@ public class Encoder {
             var outputFilePath = "";
             var itemFileExtension = "";
 
+            // If the fail count is over 20, then exit the application with a failed status
+            // so the service managers can restart it
+            if (failCount == 20) {
+                PlexbotEncoder.setExitCode(1);
+                Quarkus.asyncExit();
+                return;
+            }
+
             try {
                 logger.info("Fetching a new job");
 
@@ -92,6 +108,7 @@ public class Encoder {
                     currentWorkItem = getNextJob();
                 } catch (WebApplicationException e) {
                     logger.error("Failed to fetch job, server returned a " + e.getResponse().getStatus() + " error code");
+                    failCount += 1;
                     isNotEncoding = true;
                     return;
                 }
@@ -125,6 +142,8 @@ public class Encoder {
                 // Ensure it was able to get a download connection otherwise cancel
                 if (downloadResponse == null) {
                     workService.delete(currentWorkItem.id);
+                    addHistoryItem(currentWorkItem.mediaId, currentWorkItem.mediaType, "Failed - unable to initiate download");
+                    failCount += 1;
                     isNotEncoding = true;
                     return;
                 }
@@ -195,6 +214,7 @@ public class Encoder {
                             .execute();
                 } catch (JaffreeException e) {
                     workService.delete(currentWorkItem.id);
+                    addHistoryItem(currentWorkItem.mediaId, currentWorkItem.mediaType, "Failed - encoding failure: " + e.getCause());
 
                     // Attempt to delete work files
                     try {
@@ -204,6 +224,7 @@ public class Encoder {
                         logger.error(e2);
                     }
 
+                    failCount += 1;
                     isNotEncoding = true;
                     return;
                 }
@@ -228,15 +249,15 @@ public class Encoder {
                     Files.deleteIfExists(Paths.get(outputFilePath));
                     Files.deleteIfExists(Paths.get(tempFilePath));
                 } catch (IOException e) {
-                    workService.delete(currentWorkItem.id);
-                    isNotEncoding = true;
-                    return;
+                    logger.warn("There was an error deleting one of the temporary files. Please make sure the work folder is writable.");
                 }
 
                 // Delete the current work item
                 workService.delete(currentWorkItem.id);
+                addHistoryItem(currentWorkItem.mediaId, currentWorkItem.mediaType, "Completed");
 
                 // Mark that the encoding has been finished
+                failCount = 0;
                 isNotEncoding = true;
                 logger.info("Job completed");
             } catch (Exception e1) {
@@ -244,7 +265,10 @@ public class Encoder {
                 if (currentWorkItem.id != null) {
                     workService.delete(currentWorkItem.id);
                 }
-                isNotEncoding = true;
+
+                if (currentWorkItem.mediaId != null && currentWorkItem.mediaType != null) {
+                    addHistoryItem(currentWorkItem.mediaId, currentWorkItem.mediaType, "Failed - unknown exception: " + e1.getCause());
+                }
 
                 // Attempt to delete work files
                 try {
@@ -254,9 +278,27 @@ public class Encoder {
                     logger.error(e2);
                 }
 
+                // Mark that it is not encoding
+                failCount += 1;
+                isNotEncoding = true;
+
                 // Log the error
                 logger.error("Job failed to run", e1);
             }
+        }
+    }
+
+    private void addHistoryItem(Long mediaId, String mediaType, String status) {
+        HistoryItem item = new HistoryItem();
+        item.mediaId = mediaId;
+        item.mediaType = mediaType;
+        item.encodingAgent = workerName;
+        item.status = status;
+
+        try {
+            historyService.create(item);
+        } catch (WebApplicationException e) {
+            logger.warn("Failed to add the last job to the encoding history.");
         }
     }
 

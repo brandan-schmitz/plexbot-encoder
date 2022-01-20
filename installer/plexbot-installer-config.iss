@@ -388,6 +388,9 @@ begin
     CreateWorkDirectories();
     EnvAddPath(ExpandConstant('{app}'));
     Exec('>', ExpandConstant('{app}\plexbot-encoder.exe install'), ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end else if CurStep = ssInstall then begin
+    Exec('>', ExpandConstant('{app}\plexbot-encoder.exe stop'), ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec('>', ExpandConstant('{app}\plexbot-encoder.exe uninstall'), ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
 
