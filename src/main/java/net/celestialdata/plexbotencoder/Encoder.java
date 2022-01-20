@@ -3,6 +3,7 @@ package net.celestialdata.plexbotencoder;
 import com.github.kokorin.jaffree.JaffreeException;
 import com.github.kokorin.jaffree.LogLevel;
 import com.github.kokorin.jaffree.ffmpeg.*;
+import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import net.celestialdata.plexbotencoder.clients.models.Episode;
@@ -39,6 +40,8 @@ public class Encoder {
 
     private static final Logger logger = Logger.getLogger(Encoder.class);
 
+    private int failCount = 0;
+
     @ConfigProperty(name = "AppSettings.workerName")
     String workerName;
 
@@ -67,6 +70,10 @@ public class Encoder {
     @RestClient
     WorkService workService;
 
+    @Inject
+    @RestClient
+    HistoryService historyService;
+
     @Scheduled(every = "3s", delay = 10, delayUnit = TimeUnit.SECONDS)
     public void updateProgress() {
         try {
@@ -85,6 +92,14 @@ public class Encoder {
             var outputFilePath = "";
             var itemFileExtension = "";
 
+            // If the fail count is over 20, then exit the application with a failed status
+            // so the service managers can restart it
+            if (failCount == 20) {
+                PlexbotEncoder.setExitCode(1);
+                Quarkus.asyncExit();
+                return;
+            }
+
             try {
                 logger.info("Fetching a new job");
 
@@ -93,6 +108,7 @@ public class Encoder {
                     currentWorkItem = getNextJob();
                 } catch (WebApplicationException e) {
                     logger.error("Failed to fetch job, server returned a " + e.getResponse().getStatus() + " error code");
+                    failCount += 1;
                     isNotEncoding = true;
                     return;
                 }
@@ -127,6 +143,7 @@ public class Encoder {
                 if (downloadResponse == null) {
                     workService.delete(currentWorkItem.id);
                     addHistoryItem(currentWorkItem.mediaId, currentWorkItem.mediaType, "Failed - unable to initiate download");
+                    failCount += 1;
                     isNotEncoding = true;
                     return;
                 }
@@ -207,6 +224,7 @@ public class Encoder {
                         logger.error(e2);
                     }
 
+                    failCount += 1;
                     isNotEncoding = true;
                     return;
                 }
@@ -239,6 +257,7 @@ public class Encoder {
                 addHistoryItem(currentWorkItem.mediaId, currentWorkItem.mediaType, "Completed");
 
                 // Mark that the encoding has been finished
+                failCount = 0;
                 isNotEncoding = true;
                 logger.info("Job completed");
             } catch (Exception e1) {
@@ -260,6 +279,7 @@ public class Encoder {
                 }
 
                 // Mark that it is not encoding
+                failCount += 1;
                 isNotEncoding = true;
 
                 // Log the error
