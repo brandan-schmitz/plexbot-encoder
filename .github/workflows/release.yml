@@ -33,6 +33,11 @@ jobs:
 
       - name: Setup MS Build Tools
         uses: microsoft/setup-msbuild@v1
+
+      - name: Setup Ubuntu 20.04 WSL
+        uses: Vampire/setup-wsl@v1
+        with:
+          distribution: Ubuntu-20.04
         
       - name: Setup Graalvm
         id: setup-graalvm
@@ -76,6 +81,12 @@ jobs:
           tar -xf ffmpeg.zip --strip-components 2 *.exe
           del ffmpeg.zip
         shell: cmd
+
+      - name: Set service version
+        shell: wsl-bash {0}
+        env:
+          RELEASE_VERSION: ${{ needs.determine-version.outputs.release-version }}
+        run: sed -i 's/v0.0.0/v'${RELEASE_VERSION}'/g' installer/plexbot-encoder.xml
 
       - name: Build Installer
         run: |
