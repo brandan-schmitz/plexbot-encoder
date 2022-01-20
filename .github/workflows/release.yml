@@ -33,11 +33,6 @@ jobs:
 
       - name: Setup MS Build Tools
         uses: microsoft/setup-msbuild@v1
-
-      - name: Setup Ubuntu 20.04 WSL
-        uses: Vampire/setup-wsl@v1
-        with:
-          distribution: Ubuntu-20.04
         
       - name: Setup Graalvm
         id: setup-graalvm
@@ -55,9 +50,16 @@ jobs:
 
       - name: Download and install Inno Setup
         run: |
-          curl.exe -o innosetup-6.2.0.exe https://files.jrsoftware.org/is/6/innosetup-6.2.0.exe
+          curl -o innosetup-6.2.0.exe https://files.jrsoftware.org/is/6/innosetup-6.2.0.exe
           innosetup-6.2.0.exe /VERYSILENT /NORESTART /ALLUSERS
           echo "C:\Program Files (x86)\Inno Setup 6" >> $GITHUB_PATH
+        shell: cmd
+
+      - name: Download and install sed
+        run: |
+          mkdir "C:\Program Files\sed"
+          curl -o "C:\Program Files\sed\sed.exe" -L https://github.com/mbuilov/sed-windows/raw/master/sed-4.8-x64.exe
+          echo "C:\Program Files\sed" >> $GITHUB_PATH
         shell: cmd
 
       - name: Create app config for building
@@ -80,13 +82,10 @@ jobs:
           curl -o ffmpeg.zip -L https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2022-01-11-12-22/ffmpeg-N-105258-g3c2b674468-win64-gpl.zip
           tar -xf ffmpeg.zip --strip-components 2 *.exe
           del ffmpeg.zip
+          sed -i "s/v0.0.0/v"%RELEASE_VERSION%"/g" plexbot-encoder.xml
         shell: cmd
-
-      - name: Set service version
-        shell: wsl-bash {0}
         env:
           RELEASE_VERSION: ${{ needs.determine-version.outputs.release-version }}
-        run: sed -i 's/v0.0.0/v'${RELEASE_VERSION}'/g' installer/plexbot-encoder.xml
 
       - name: Build Installer
         run: |
